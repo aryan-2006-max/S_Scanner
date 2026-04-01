@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="description" content="Smart Self-Checkout — Skip the queue, scan & pay from your phone." />
+  <meta name="theme-color" content="#0f0f1a" />
+  <title>ScanCart — Smart Self-Checkout</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/styles/main.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- SPA content renders here -->
+  </div>
+  
+  <!-- Bottom Navigation Bar -->
+  <nav id="bottom-nav" class="bottom-nav hidden">
+    <button class="nav-btn" data-page="home" id="nav-home">
+      <span class="material-icons-round">home</span>
+      <span class="nav-label">Home</span>
+    </button>
+    <button class="nav-btn" data-page="scanner" id="nav-scanner">
+      <span class="material-icons-round">qr_code_scanner</span>
+      <span class="nav-label">Scan</span>
+    </button>
+    <button class="nav-btn" data-page="cart" id="nav-cart">
+      <span class="material-icons-round">shopping_cart</span>
+      <span class="nav-label">Cart</span>
+      <span class="cart-badge hidden" id="cart-badge">0</span>
+    </button>
+    <button class="nav-btn" data-page="orders" id="nav-orders">
+      <span class="material-icons-round">receipt_long</span>
+      <span class="nav-label">Orders</span>
+    </button>
+  </nav>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
