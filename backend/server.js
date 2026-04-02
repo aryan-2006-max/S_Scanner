@@ -2,8 +2,6 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
-const { initDatabase } = require('./db');
-
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -43,18 +41,14 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error.' });
 });
 
-// Initialize database and start server
-async function start() {
-  try {
-    await initDatabase();
-    app.listen(PORT, () => {
-      console.log(`🚀 Smart Checkout API running at http://localhost:${PORT}`);
-      console.log(`📦 MySQL: ${process.env.DB_USER}@${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`);
-    });
-  } catch (err) {
-    console.error('❌ Failed to start server:', err.message);
-    process.exit(1);
-  }
-}
+// Start server FIRST, then try database
+app.listen(PORT, () => {
+  console.log(`🚀 Smart Checkout API running at http://localhost:${PORT}`);
+  console.log(`📦 MySQL: ${process.env.DB_USER || 'root'}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 3306}/${process.env.DB_NAME || 'smart_checkout'}`);
 
-start();
+  // Initialize DB in background (don't crash if it fails)
+  const { initDatabase } = require('./db');
+  initDatabase()
+    .then(() => console.log('✅ Database ready'))
+    .catch(err => console.error('⚠️ Database init warning:', err.message));
+});

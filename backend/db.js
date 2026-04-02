@@ -3,20 +3,44 @@ require('dotenv').config();
 
 const DB_NAME = process.env.DB_NAME || 'smart_checkout';
 
-// ─── Create pool WITHOUT database first (for initial setup) ───
-async function initDatabase() {
-  // Step 1: Connect without specifying database to create it
-  const tempConn = await mysql.createConnection({
-    host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT) || 3306,
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-  });
+// ─── MySQL Connection Pool ───
+const poolConfig = {
+  host: process.env.DB_HOST || 'localhost',
+  port: parseInt(process.env.DB_PORT) || 3306,
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || '',
+  database: DB_NAME,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+  connectTimeout: 30000,
+};
 
+// Add SSL for remote databases (Railway, PlanetScale, etc.)
+if (process.env.DB_HOST && process.env.DB_HOST !== 'localhost' && process.env.DB_HOST !== '127.0.0.1') {
+  poolConfig.ssl = { rejectUnauthorized: false };
+  console.log('🔒 SSL enabled for remote MySQL');
+}
+
+const pool = mysql.createPool(poolConfig);
+
+// ─── Initialize Database Tables ───
+async function initDatabase() {
+  console.log(`📡 Connecting to MySQL at ${poolConfig.host}:${poolConfig.port}...`);
+
+  // Step 1: Connect WITHOUT database to create it
+  const initConfig = { ...poolConfig };
+  delete initConfig.database;
+  delete initConfig.connectionLimit;
+  delete initConfig.waitForConnections;
+  delete initConfig.queueLimit;
+
+  const tempConn = await mysql.createConnection(initConfig);
   await tempConn.query(`CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\``);
   await tempConn.end();
+  console.log(`📁 Database '${DB_NAME}' ready`);
 
-  // Step 2: Now create tables inside the database
+  // Step 2: Create tables
   const conn = await pool.getConnection();
   try {
     await conn.query(`
@@ -104,26 +128,10 @@ async function initDatabase() {
       )
     `);
 
-    console.log('✅ MySQL database tables initialized successfully');
+    console.log('✅ All tables created successfully');
   } finally {
     conn.release();
   }
 }
-
-// ─── MySQL Connection Pool ───
-const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT) || 3306,
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: DB_NAME,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  connectTimeout: 30000,
-  ssl: process.env.DB_HOST && process.env.DB_HOST !== 'localhost'
-    ? { rejectUnauthorized: false }
-    : undefined,
-});
 
 module.exports = { pool, initDatabase };
