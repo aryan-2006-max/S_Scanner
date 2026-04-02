@@ -1,26 +1,24 @@
 const mysql = require('mysql2/promise');
 require('dotenv').config();
 
-// ─── MySQL Connection Pool ───
-const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT) || 3306,
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'smart_checkout',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-});
+const DB_NAME = process.env.DB_NAME || 'smart_checkout';
 
-// ─── Initialize Database Tables ───
+// ─── Create pool WITHOUT database first (for initial setup) ───
 async function initDatabase() {
+  // Step 1: Connect without specifying database to create it
+  const tempConn = await mysql.createConnection({
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT) || 3306,
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+  });
+
+  await tempConn.query(`CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\``);
+  await tempConn.end();
+
+  // Step 2: Now create tables inside the database
   const conn = await pool.getConnection();
   try {
-    // Create database if not exists
-    await conn.query(`CREATE DATABASE IF NOT EXISTS \`${process.env.DB_NAME || 'smart_checkout'}\``);
-    await conn.query(`USE \`${process.env.DB_NAME || 'smart_checkout'}\``);
-
     await conn.query(`
       CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -107,12 +105,25 @@ async function initDatabase() {
     `);
 
     console.log('✅ MySQL database tables initialized successfully');
-  } catch (err) {
-    console.error('❌ Database initialization error:', err.message);
-    throw err;
   } finally {
     conn.release();
   }
 }
+
+// ─── MySQL Connection Pool ───
+const pool = mysql.createPool({
+  host: process.env.DB_HOST || 'localhost',
+  port: parseInt(process.env.DB_PORT) || 3306,
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || '',
+  database: DB_NAME,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+  connectTimeout: 30000,
+  ssl: process.env.DB_HOST && process.env.DB_HOST !== 'localhost'
+    ? { rejectUnauthorized: false }
+    : undefined,
+});
 
 module.exports = { pool, initDatabase };
