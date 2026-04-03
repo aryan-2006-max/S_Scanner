@@ -29,12 +29,24 @@ async function apiFetch(path, options = {}) {
     ...options.headers,
   };
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-  });
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch (err) {
+    throw new Error('Network error — could not reach server.');
+  }
 
-  const data = await res.json();
+  // Handle empty responses
+  const text = await res.text();
+  let data;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(`Server error (${res.status}): ${text.substring(0, 100)}`);
+  }
 
   if (!res.ok) {
     throw new Error(data.error || `Request failed (${res.status})`);
