@@ -6,8 +6,11 @@ export function renderHome(app, router) {
   let selectedCity = localStorage.getItem('sc_city') || '';
   let stores = [];
   let showProfile = false;
+  let loading = true;
 
   async function loadData() {
+    loading = true;
+    render();
     try {
       const citiesData = await apiFetch('/stores/cities');
       cities = citiesData.cities || [];
@@ -19,6 +22,7 @@ export function renderHome(app, router) {
     } catch (err) {
       console.error('Load error:', err);
     }
+    loading = false;
     render();
   }
 
@@ -66,8 +70,14 @@ export function renderHome(app, router) {
           Stores in ${selectedCity || '...'}
         </div>
 
-        ${stores.length === 0 ? `
+        ${loading ? `
           <div class="loading-spinner"></div>
+        ` : stores.length === 0 ? `
+          <div class="empty-state" style="text-align:center;padding:2rem;opacity:0.6;">
+            <span class="material-icons-round" style="font-size:48px;margin-bottom:8px;">store</span>
+            <p>No stores found${selectedCity ? ' in ' + selectedCity : ''}.</p>
+            <p style="font-size:0.85rem;margin-top:4px;">Try selecting a different city or check back later.</p>
+          </div>
         ` : `
           <div class="stores-grid stagger-children">
             ${stores.map(s => `
@@ -139,12 +149,15 @@ export function renderHome(app, router) {
   }
 
   async function loadStores() {
+    loading = true;
+    render();
     try {
       const data = await apiFetch(`/stores?city=${encodeURIComponent(selectedCity)}`);
       stores = data.stores || [];
     } catch (err) {
       console.error('Store load error:', err);
     }
+    loading = false;
     render();
   }
 
