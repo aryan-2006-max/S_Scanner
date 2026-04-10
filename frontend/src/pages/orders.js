@@ -10,13 +10,22 @@ export function renderOrders(app, router) {
       const data = await apiFetch('/orders');
       orders = data.orders || [];
     } catch (err) {
-      console.error('Orders error:', err);
+      console.log('Using local demo orders (backend unavailable):', err.message);
       if (err.message.includes('Access denied') || err.message.includes('token')) {
         router.showToast('Please log in to view orders', 'error');
         router.navigate('signup');
         return;
       }
     }
+
+    // Merge with locally-stored demo orders
+    const demoOrders = JSON.parse(localStorage.getItem('sc_orders') || '[]');
+    if (demoOrders.length > 0) {
+      const existingIds = new Set(orders.map(o => o.id));
+      const newDemoOrders = demoOrders.filter(o => !existingIds.has(o.id));
+      orders = [...newDemoOrders, ...orders];
+    }
+
     loading = false;
     render();
   }
@@ -77,10 +86,10 @@ export function renderOrders(app, router) {
                     </div>
                     <div class="order-date">${formatted}</div>
                   </div>
-                  <div class="order-items-count">${o.item_count || '—'} item${(o.item_count || 0) !== 1 ? 's' : ''} • ${(o.payment_method || '').toUpperCase()}</div>
+                  <div class="order-items-count">${o.item_count || (o.items?.length) || '—'} item${(o.item_count || o.items?.length || 0) !== 1 ? 's' : ''} • ${(o.payment_method || '').toUpperCase()}</div>
                   <div class="order-card-footer">
                     <div class="order-total">₹${o.grand_total?.toFixed(2)}</div>
-                    <span class="order-status ${o.payment_status || 'completed'}">${o.payment_status || 'completed'}</span>
+                    <span class="order-status ${o.status || o.payment_status || 'completed'}">${o.status || o.payment_status || 'completed'}</span>
                   </div>
                 </div>
               `;
@@ -95,7 +104,15 @@ export function renderOrders(app, router) {
 
     document.querySelectorAll('.order-card').forEach(card => {
       card.addEventListener('click', () => {
-        loadOrderDetail(card.dataset.orderId);
+        const orderId = card.dataset.orderId;
+        // Check if it's a demo order (already has full data)
+        const demoOrder = orders.find(o => String(o.id) === String(orderId) && o.items);
+        if (demoOrder) {
+          selectedOrder = demoOrder;
+          render();
+        } else {
+          loadOrderDetail(orderId);
+        }
       });
     });
   }
