@@ -1,4 +1,5 @@
 import { apiFetch } from '../utils/api.js';
+import { lookupDemoProduct, getAllDemoProducts } from '../utils/demoProducts.js';
 
 export function renderScanner(app, router) {
   const store = JSON.parse(localStorage.getItem('sc_store') || '{}');
@@ -6,20 +7,41 @@ export function renderScanner(app, router) {
   let scannedProduct = null;
   let quantity = 1;
   let manualMode = false;
+  let activeCategory = 'All';
+
+  // Get unique categories from demo products
+  const allProducts = getAllDemoProducts();
+  const categories = ['All', ...new Set(allProducts.map(p => p.category))];
+
+  function getFilteredProducts() {
+    if (activeCategory === 'All') return allProducts;
+    return allProducts.filter(p => p.category === activeCategory);
+  }
 
   function render() {
+    const filteredProducts = getFilteredProducts();
+    const cart = JSON.parse(localStorage.getItem('sc_cart') || '[]');
+    const cartCount = cart.reduce((s, i) => s + i.quantity, 0);
+
     app.innerHTML = `
       <div class="page">
         <div class="page-header">
           <button class="back-btn" id="back-btn">
             <span class="material-icons-round">arrow_back</span>
           </button>
-          <div>
-            <h1 class="page-title">Scan Products</h1>
-            <p class="page-subtitle">${store.name || 'Select a store first'}</p>
+          <div style="flex:1">
+            <h1 class="page-title">Scan & Add</h1>
+            <p class="page-subtitle">${store.name || 'Demo Store'}</p>
           </div>
+          ${cartCount > 0 ? `
+            <button class="cart-floating-btn animate-scale" id="go-to-cart">
+              <span class="material-icons-round">shopping_cart</span>
+              <span class="cart-floating-badge">${cartCount}</span>
+            </button>
+          ` : ''}
         </div>
 
+        <!-- Scanner Section -->
         <div class="scanner-container animate-scale" id="scanner-region">
           <div class="scanner-overlay">
             <div class="scanner-frame"></div>
@@ -43,20 +65,55 @@ export function renderScanner(app, router) {
           ` : ''}
         </div>
 
-        <div class="mt-16">
-          <div class="section-title">
+        <!-- ═══ DEMO PRODUCTS CATALOG ═══ -->
+        <div class="demo-catalog mt-16 animate-fade">
+          <div class="section-title" style="margin-bottom:4px">
             <span class="material-icons-round">inventory_2</span>
-            Quick Add — Sample Barcodes
+            Sample Products 
+            <span class="demo-badge">DEMO</span>
           </div>
-          <div class="city-chips" style="flex-wrap:wrap;">
-            <button class="city-chip" data-barcode="8901030793912">Aashirvaad Atta</button>
-            <button class="city-chip" data-barcode="8901725183004">Tata Salt</button>
-            <button class="city-chip" data-barcode="8901063024144">Maggi Noodles</button>
-            <button class="city-chip" data-barcode="8902080700202">Coca-Cola</button>
-            <button class="city-chip" data-barcode="8901491101769">Lay's Chips</button>
-            <button class="city-chip" data-barcode="8901063157002">KitKat</button>
-            <button class="city-chip" data-barcode="0012345678905">Echo Dot</button>
-            <button class="city-chip" data-barcode="0012345678929">Kindle</button>
+          <p class="demo-hint">Tap any product to add it to your cart for testing</p>
+
+          <!-- Category Filter Chips -->
+          <div class="category-chips-scroll">
+            <div class="category-chips">
+              ${categories.map(cat => `
+                <button class="category-chip ${cat === activeCategory ? 'active' : ''}" data-category="${cat}">
+                  <span class="category-chip-icon">${getCategoryIcon(cat)}</span>
+                  ${cat}
+                </button>
+              `).join('')}
+            </div>
+          </div>
+
+          <!-- Product Grid -->
+          <div class="demo-products-grid stagger-children">
+            ${filteredProducts.map(product => {
+              const inCart = cart.find(i => i.product.id === product.id);
+              return `
+                <div class="demo-product-card ${inCart ? 'in-cart' : ''}" data-barcode="${product.barcode}">
+                  <div class="demo-product-img-wrap">
+                    <img class="demo-product-img" 
+                         src="${product.image_url}" 
+                         alt="${product.name}"
+                         loading="lazy"
+                         onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%231a1a2e%22 width=%22100%22 height=%22100%22/><text fill=%22%236c5ce7%22 x=%2250%22 y=%2255%22 text-anchor=%22middle%22 font-size=%2230%22>📦</text></svg>'" />
+                    ${inCart ? `<div class="demo-product-in-cart-badge">×${inCart.quantity}</div>` : ''}
+                  </div>
+                  <div class="demo-product-info">
+                    <span class="demo-product-category">${product.category}</span>
+                    <h4 class="demo-product-name">${product.name}</h4>
+                    <div class="demo-product-weight">${product.weight || ''}</div>
+                    <div class="demo-product-bottom">
+                      <span class="demo-product-price">₹${product.price.toFixed(0)}</span>
+                      <button class="demo-add-btn" data-quick-add="${product.barcode}" title="Quick add">
+                        <span class="material-icons-round">add</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
           </div>
         </div>
       </div>
@@ -66,6 +123,15 @@ export function renderScanner(app, router) {
 
     bindEvents();
     if (!manualMode) initScanner();
+  }
+
+  function getCategoryIcon(cat) {
+    const icons = {
+      'All': '🛒', 'Staples': '🌾', 'Instant Food': '🍜', 'Beverages': '🥤',
+      'Snacks': '🍿', 'Chocolates': '🍫', 'Electronics': '⚡', 'Biscuits': '🍪',
+      'Dairy': '🧈', 'Household': '🏠', 'Personal Care': '🧴',
+    };
+    return icons[cat] || '📦';
   }
 
   function renderProductPopup() {
@@ -78,6 +144,7 @@ export function renderScanner(app, router) {
           <div class="product-popup-info">
             <div class="product-category">${scannedProduct.category || 'General'}</div>
             <h3>${scannedProduct.name}</h3>
+            ${scannedProduct.description ? `<p class="product-popup-desc">${scannedProduct.description}</p>` : ''}
             <div class="product-price">₹${scannedProduct.price?.toFixed(2)}</div>
           </div>
         </div>
@@ -89,7 +156,7 @@ export function renderScanner(app, router) {
           </div>
           <button class="btn btn-primary" style="flex:1" id="add-to-cart-btn">
             <span class="material-icons-round" style="font-size:18px">add_shopping_cart</span>
-            Add to Cart
+            Add ₹${(scannedProduct.price * quantity).toFixed(2)}
           </button>
         </div>
         <button class="btn btn-secondary btn-sm btn-block mt-8" id="close-popup">
@@ -103,6 +170,11 @@ export function renderScanner(app, router) {
     document.getElementById('back-btn')?.addEventListener('click', () => {
       stopScanner();
       router.navigate('home');
+    });
+
+    document.getElementById('go-to-cart')?.addEventListener('click', () => {
+      stopScanner();
+      router.navigate('cart');
     });
 
     document.getElementById('toggle-manual')?.addEventListener('click', () => {
@@ -123,9 +195,33 @@ export function renderScanner(app, router) {
       }
     });
 
-    // Quick-add barcode chips
-    document.querySelectorAll('[data-barcode]').forEach(btn => {
-      btn.addEventListener('click', () => lookupBarcode(btn.dataset.barcode));
+    // Category filter chips
+    document.querySelectorAll('[data-category]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        activeCategory = btn.dataset.category;
+        render();
+      });
+    });
+
+    // Product card click → show popup
+    document.querySelectorAll('.demo-product-card').forEach(card => {
+      card.addEventListener('click', (e) => {
+        // Don't trigger if quick-add button was clicked
+        if (e.target.closest('[data-quick-add]')) return;
+        lookupBarcode(card.dataset.barcode);
+      });
+    });
+
+    // Quick-add buttons (add directly without popup)
+    document.querySelectorAll('[data-quick-add]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const barcode = btn.dataset.quickAdd;
+        const demoResult = lookupDemoProduct(barcode);
+        if (demoResult) {
+          quickAddToCart(demoResult.product);
+        }
+      });
     });
 
     // Product popup events
@@ -133,12 +229,21 @@ export function renderScanner(app, router) {
       if (quantity > 1) {
         quantity--;
         document.getElementById('qty-display').textContent = quantity;
+        // Update the "Add ₹XX" text
+        const btn = document.getElementById('add-to-cart-btn');
+        if (btn && scannedProduct) {
+          btn.innerHTML = `<span class="material-icons-round" style="font-size:18px">add_shopping_cart</span> Add ₹${(scannedProduct.price * quantity).toFixed(2)}`;
+        }
       }
     });
 
     document.getElementById('qty-plus')?.addEventListener('click', () => {
       quantity++;
       document.getElementById('qty-display').textContent = quantity;
+      const btn = document.getElementById('add-to-cart-btn');
+      if (btn && scannedProduct) {
+        btn.innerHTML = `<span class="material-icons-round" style="font-size:18px">add_shopping_cart</span> Add ₹${(scannedProduct.price * quantity).toFixed(2)}`;
+      }
     });
 
     document.getElementById('add-to-cart-btn')?.addEventListener('click', () => {
@@ -153,6 +258,17 @@ export function renderScanner(app, router) {
   }
 
   async function lookupBarcode(code) {
+    // Try demo products first (works offline)
+    const demoResult = lookupDemoProduct(code);
+    if (demoResult) {
+      scannedProduct = demoResult.product;
+      quantity = 1;
+      stopScanner();
+      render();
+      return;
+    }
+
+    // Fallback to API
     try {
       const data = await apiFetch(`/products/barcode/${code}`);
       if (data.product) {
@@ -164,6 +280,22 @@ export function renderScanner(app, router) {
     } catch (err) {
       router.showToast(err.message || 'Product not found', 'error');
     }
+  }
+
+  function quickAddToCart(product) {
+    const cart = JSON.parse(localStorage.getItem('sc_cart') || '[]');
+    const existing = cart.find(item => item.product.id === product.id);
+
+    if (existing) {
+      existing.quantity += 1;
+    } else {
+      cart.push({ product, quantity: 1 });
+    }
+
+    localStorage.setItem('sc_cart', JSON.stringify(cart));
+    router.updateCartBadge();
+    router.showToast(`${product.name} added!`, 'success');
+    render(); // Re-render to update in-cart badges
   }
 
   function addToCart() {
@@ -206,7 +338,6 @@ export function renderScanner(app, router) {
       );
     } catch (err) {
       console.log('Camera not available, using manual mode:', err.message);
-      // Camera might not be available — that's ok, manual mode works
     }
   }
 
