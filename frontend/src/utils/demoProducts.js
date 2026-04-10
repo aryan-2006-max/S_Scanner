@@ -10,7 +10,7 @@ const DEMO_PRODUCTS = {
     price: 285.00,
     category: 'Staples',
     barcode: '8901030793912',
-    image_url: 'https://www.thegrocart.com/products/aashirvaad-atta-5kg-SKU-5381',
+    image_url: 'https://storage.googleapis.com/shy-pub/340140/aashirvaad-atta-1702468645457_SKU-0836_0.jpg',
     description: 'Premium whole wheat atta for soft rotis',
     weight: '5 kg',
     stock: 'in_stock',
