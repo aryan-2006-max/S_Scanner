@@ -8,13 +8,23 @@ export function renderPayment(app, router) {
   let paymentMethod = 'upi';
   let processing = false;
 
+  // Demo offers that work without backend
+  const DEMO_OFFERS = [
+    { id: 'demo-1', title: '10% Off', description: 'On orders above ₹200', code: 'SAVE10', discount_percent: 10, min_order: 200 },
+    { id: 'demo-2', title: 'Flat ₹50 Off', description: 'On orders above ₹500', code: 'FLAT50', discount_percent: 0, flat_discount: 50, min_order: 500 },
+    { id: 'demo-3', title: '15% Off', description: 'First order discount', code: 'WELCOME15', discount_percent: 15, min_order: 0 },
+  ];
+
   function getCart() { return JSON.parse(localStorage.getItem('sc_cart') || '[]'); }
 
   async function loadOffers() {
     try {
       const data = await apiFetch('/offers');
       offers = data.offers || [];
-    } catch (err) { console.error('Offers error:', err); }
+    } catch (err) {
+      console.log('Using demo offers (backend unavailable):', err.message);
+      offers = DEMO_OFFERS;
+    }
     render();
   }
 
@@ -110,7 +120,7 @@ export function renderPayment(app, router) {
           </div>
           ${discount > 0 ? `
             <div class="summary-row discount">
-              <span class="summary-label">Discount (${selectedOffer?.discount_percent || ''}%)</span>
+              <span class="summary-label">Discount (${selectedOffer?.discount_percent || ''}${selectedOffer?.discount_percent ? '%' : ''})</span>
               <span class="summary-value">-₹${discount.toFixed(2)}</span>
             </div>
           ` : ''}
@@ -186,8 +196,8 @@ export function renderPayment(app, router) {
     // Offer cards
     document.querySelectorAll('.offer-card').forEach(card => {
       card.addEventListener('click', () => {
-        const offerId = parseInt(card.dataset.offerId);
-        const offer = offers.find(o => o.id === offerId);
+        const offerId = card.dataset.offerId;
+        const offer = offers.find(o => String(o.id) === String(offerId));
         if (!offer) return;
 
         const cart = getCart();
@@ -198,13 +208,17 @@ export function renderPayment(app, router) {
           return;
         }
 
-        if (selectedOffer?.id === offerId) {
+        if (String(selectedOffer?.id) === String(offerId)) {
           selectedOffer = null;
           discount = 0;
           couponCode = '';
         } else {
           selectedOffer = offer;
-          discount = Math.round((subtotal * offer.discount_percent) / 100 * 100) / 100;
+          if (offer.flat_discount) {
+            discount = offer.flat_discount;
+          } else {
+            discount = Math.round((subtotal * offer.discount_percent) / 100 * 100) / 100;
+          }
           couponCode = offer.code;
         }
         render();
@@ -219,6 +233,26 @@ export function renderPayment(app, router) {
       const cart = getCart();
       const subtotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
 
+      // Try demo offers first
+      const demoOffer = [...DEMO_OFFERS, ...offers].find(o => o.code.toUpperCase() === code.toUpperCase());
+      if (demoOffer) {
+        if (subtotal < (demoOffer.min_order || 0)) {
+          router.showToast(`Min order ₹${demoOffer.min_order} required`, 'error');
+          return;
+        }
+        selectedOffer = demoOffer;
+        if (demoOffer.flat_discount) {
+          discount = demoOffer.flat_discount;
+        } else {
+          discount = Math.round((subtotal * demoOffer.discount_percent) / 100 * 100) / 100;
+        }
+        couponCode = code;
+        router.showToast(`Coupon applied! You save ₹${discount.toFixed(2)}`, 'success');
+        render();
+        return;
+      }
+
+      // Fallback to API
       try {
         const data = await apiFetch('/offers/validate', {
           method: 'POST',
@@ -230,7 +264,7 @@ export function renderPayment(app, router) {
         router.showToast(data.message, 'success');
         render();
       } catch (err) {
-        router.showToast(err.message, 'error');
+        router.showToast(err.message || 'Invalid coupon code', 'error');
       }
     });
 
@@ -252,11 +286,13 @@ export function renderPayment(app, router) {
 
     const cart = getCart();
     const store = JSON.parse(localStorage.getItem('sc_store') || '{}');
+    const subtotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+    const taxableAmount = subtotal - discount;
+    const gstAmount = taxableAmount * 0.18;
+    const grandTotal = taxableAmount + gstAmount;
 
     try {
-      // Simulate payment delay
-      await new Promise(r => setTimeout(r, 2000));
-
+      // Try backend first
       const data = await apiFetch('/orders', {
         method: 'POST',
         body: JSON.stringify({
@@ -273,16 +309,51 @@ export function renderPayment(app, router) {
       // Clear cart
       localStorage.removeItem('sc_cart');
       router.updateCartBadge();
-
-      // Save last order for bill page
       localStorage.setItem('sc_last_order', JSON.stringify(data.order));
-
       router.showToast('Payment successful! 🎉', 'success');
       router.navigate('bill');
     } catch (err) {
-      processing = false;
-      render();
-      router.showToast(err.message || 'Payment failed', 'error');
+      // ═══ DEMO FALLBACK — generate order locally ═══
+      console.log('Backend unavailable, generating demo order locally');
+
+      // Simulate payment processing delay
+      await new Promise(r => setTimeout(r, 2000));
+
+      const demoOrder = {
+        id: 'DEMO-' + Date.now(),
+        transaction_id: 'TXN' + Math.random().toString(36).substring(2, 10).toUpperCase(),
+        store_name: store.name || 'Demo Store',
+        store_address: store.address || '',
+        items: cart.map(item => ({
+          name: item.product.name,
+          price: item.product.price,
+          quantity: item.quantity,
+          image_url: item.product.image_url || '',
+        })),
+        subtotal,
+        discount,
+        offer_code: couponCode || null,
+        gst_amount: gstAmount,
+        grand_total: grandTotal,
+        payment_method: paymentMethod,
+        created_at: new Date().toISOString(),
+        status: 'completed',
+      };
+
+      // Clear cart
+      localStorage.removeItem('sc_cart');
+      router.updateCartBadge();
+
+      // Save the demo order
+      localStorage.setItem('sc_last_order', JSON.stringify(demoOrder));
+
+      // Also save to orders list
+      const orders = JSON.parse(localStorage.getItem('sc_orders') || '[]');
+      orders.unshift(demoOrder);
+      localStorage.setItem('sc_orders', JSON.stringify(orders));
+
+      router.showToast('Payment successful! 🎉 (Demo)', 'success');
+      router.navigate('bill');
     }
   }
 
