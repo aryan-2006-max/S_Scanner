@@ -258,7 +258,7 @@ export function renderHome(app, router) {
         <!-- Header -->
         <div class="home-header">
           <div class="home-greeting">
-            <h2>${greeting}, ${user?.name?.split(' ')[0] || 'User'} 👋</h2>
+            <h2>${greeting}, ${user?.name?.split(' ')[0] || 'User'}</h2>
             <p>Select a store to start shopping</p>
           </div>
           <div class="home-avatar" id="avatar-btn">${initials}</div>
